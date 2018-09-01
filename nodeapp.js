@@ -42,43 +42,53 @@ function saveToMongo(user, orderedResultArray) {
 
 //formats the response before sending to the client
 function resultFormatter(response, user) {
-    var resultArray = [];
-    var bufferAmount = 1000;
-    for(var key in response) {
-        for(var i = 0;i < response[key].length; i++) {
-            var dateBuffer = (response[key][i][0].date.getTime() - response[key][i][1].date.getTime());
-            var time = moment(response[key][i][0].date.getTime() + dateBuffer).format();
-            if(response[key][i][0].amount < 0)
-                var nextAmount = response[key][i][0].amount - bufferAmount;
-            else
-                var nextAmount = response[key][i][0].amount + bufferAmount;
-            var result = {
-                "name": response[key][i][0].name,
-                "user_id": user,
-                "next_amt": nextAmount,
-                "next_date": time,
-                "transactions": response[key][i]
-            };
-            resultArray.push(result);
+    new Promise((resolve, reject) => {
+        var resultArray = [];
+        var bufferAmount = 1000;
+        for(var key in response) {
+            for(var i = 0;i < response[key].length; i++) {
+                var dateBuffer = (response[key][i][0].date.getTime() - response[key][i][1].date.getTime());
+                var time = moment(response[key][i][0].date.getTime() + dateBuffer).format();
+                if(response[key][i][0].amount < 0)
+                    var nextAmount = response[key][i][0].amount - bufferAmount;
+                else
+                    var nextAmount = response[key][i][0].amount + bufferAmount;
+                var result = {
+                    "name": response[key][i][0].name,
+                    "user_id": user,
+                    "next_amt": nextAmount,
+                    "next_date": time,
+                    "transactions": response[key][i]
+                };
+                resultArray.push(result);
+            }
         }
-    }
-    const orderedResultArray = _.orderBy(resultArray, ['name']);
-    socket.send(JSON.stringify(orderedResultArray));
-    saveToMongo(user, orderedResultArray);
+        resolve(resultArray);
+        console.log(resultArray);
+    }).then((result) => {
+        const orderedResult = _.orderBy(result, ['name']);
+        socket.send(JSON.stringify(orderedResult));
+        saveToMongo(user, orderedResult);
+    }, (err) => {
+        throw err;
+    })
+    .catch((err) => {
+        console.log(`Error: ${err}`);
+    });
 }
 
 //function to get the recurring transactions
 var getRecurringTransactions = (user, dateUpperLimit, dateLowerLimit, factor) => {
     return new Promise((resolve, reject) => {
         var amountUpperLimit = 1000;
-        var amountLowerLimit = 0;
+        var amountLowerLimit = -1000;
         var response = {};
         transaction.aggregate([
         { 
             $match: { user_id: user} },
         { 
             $group: {
-                _id: {user_id: "$user_id", company: "$companyName"},
+                _id: {user_id: "$user_id", company: "$company_name"},
                 details: {$push: {name: "$name", trans_id: "$trans_id", amount: "$amount", date: "$date"} }
             }
         }
@@ -98,7 +108,7 @@ var getRecurringTransactions = (user, dateUpperLimit, dateLowerLimit, factor) =>
                             }
                             list.push(detailsArray[0]);
                             currentSec = detailsArray[0].date.getTime()/factor;
-                            currentAmount = detailsArray[0].amount;
+                            var currentAmount = detailsArray[0].amount;
                             detailsArray.splice(0, 1);
                             while(detailsArray.length > 0) {
                                 var found = detailsArray.find((detail) => {
@@ -115,6 +125,7 @@ var getRecurringTransactions = (user, dateUpperLimit, dateLowerLimit, factor) =>
                                 }
                                 var index = detailsArray.indexOf(found);
                                 currentSec = detailsArray[index].date.getTime()/factor;
+                                currentAmount = detailsArray[index].amount;
                                 list.push(detailsArray[index]);
                                 detailsArray.splice(index, 1);
                             }

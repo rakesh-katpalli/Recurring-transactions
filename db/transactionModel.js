@@ -14,11 +14,10 @@ var transactionSchema = new mongoose.Schema({
         minlength: 1,
         trim: true
     },
-    companyName: {
+    company_name: {
         type: String,
         required: true,
         minlength: 1,
-        trim: true
     },
     name: {
         type: String,
@@ -42,13 +41,11 @@ var recurringSchema = new mongoose.Schema({
         type: String,
         required: true,
         minlength: 1,
-        trim: true
     },
     recurring_transactions: {
         type: String,
         required: true,
         minlength: 1,
-        trim: true
     }
 });
 
