@@ -1,0 +1,17 @@
+{
+  "name": "clerkie",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Rakesh Katpalli",
+  "license": "ISC",
+  "dependencies": {
+    "lodash": "^4.17.10",
+    "moment": "^2.22.2",
+    "mongoose": "^5.2.9",
+    "zmq": "^2.15.3"
+  }
+}
