@@ -42,16 +42,20 @@ function saveToMongo(user, orderedResultArray) {
 
 //formats the response before sending to the client
 function resultFormatter(response, user) {
-    var bufferAmount = 1000;
     var resultArray = [];
+    var bufferAmount = 1000;
     for(var key in response) {
         for(var i = 0;i < response[key].length; i++) {
             var dateBuffer = (response[key][i][0].date.getTime() - response[key][i][1].date.getTime());
             var time = moment(response[key][i][0].date.getTime() + dateBuffer).format();
+            if(response[key][i][0].amount < 0)
+                var nextAmount = response[key][i][0].amount - bufferAmount;
+            else
+                var nextAmount = response[key][i][0].amount + bufferAmount;
             var result = {
                 "name": response[key][i][0].name,
                 "user_id": user,
-                "next_amt": response[key][i][0].amount + bufferAmount,
+                "next_amt": nextAmount,
                 "next_date": time,
                 "transactions": response[key][i]
             };
@@ -64,8 +68,10 @@ function resultFormatter(response, user) {
 }
 
 //function to get the recurring transactions
-var getRecurringTransactions = (user, highLimit, lowerLimit, factor) => {
+var getRecurringTransactions = (user, dateUpperLimit, dateLowerLimit, factor) => {
     return new Promise((resolve, reject) => {
+        var amountUpperLimit = 1000;
+        var amountLowerLimit = 0;
         var response = {};
         transaction.aggregate([
         { 
@@ -80,24 +86,28 @@ var getRecurringTransactions = (user, highLimit, lowerLimit, factor) => {
                 if (err) 
                     console.log(`Error: ${err}`);
                 else {  
-                    for(let i = 0; i<res.length; i++) {
+                    for(var i = 0; i<res.length; i++) {
                         var detailsArray = res[i].details.sort(sort_date);
                         while(detailsArray.length > 0) {
                             var list = [];
                             var currentSec = (new Date('2018-08-10T08:00:00.000Z').getTime())/factor;
                             //checks whether the latest transaction is current, if not discards it
-                            if(((currentSec - (detailsArray[0].date.getTime()/factor))) > highLimit) {
+                            if(((currentSec - (detailsArray[0].date.getTime()/factor))) > dateUpperLimit) {
                                 detailsArray.splice(0, 1);
                                 break;
                             }
                             list.push(detailsArray[0]);
                             currentSec = detailsArray[0].date.getTime()/factor;
+                            currentAmount = detailsArray[0].amount;
                             detailsArray.splice(0, 1);
                             while(detailsArray.length > 0) {
                                 var found = detailsArray.find((detail) => {
                                     var detailDate = detail.date.getTime()/factor;
-                                    return (((currentSec - detailDate) <= highLimit) &&
-                                    ((currentSec - detailDate) >= lowerLimit));
+                                    var detailAmount = detail.amount;
+                                    return (((currentSec - detailDate) <= dateUpperLimit) &&
+                                    ((currentSec - detailDate) >= dateLowerLimit) &&
+                                    ((currentAmount - detailAmount) <= amountUpperLimit) &&
+                                    ((currentAmount - detailAmount) >= amountLowerLimit));
                                 });
                                 if(found === undefined) {
                                     currentSec = (new Date('2018-08-10T08:00:00.000Z').getTime())/factor;
@@ -128,10 +138,10 @@ var getRecurringTransactions = (user, highLimit, lowerLimit, factor) => {
 
 // A callback for the event that is invoked a message is received.
 socket.on('message', (message) => {         // on message
-    let jsonMessage = JSON.parse(message);
+    var jsonMessage = JSON.parse(message);
     //Upsert transactions
     if (jsonMessage.task === "upsert_transactions") {
-        for(let i = 0; i < jsonMessage.transactions.length; i++) {
+        for(var i = 0; i < jsonMessage.transactions.length; i++) {
             var tran = jsonMessage.transactions[i];
             date = new Date(tran.date);
             //separating the reference number from the name of the transaction 
@@ -141,7 +151,7 @@ socket.on('message', (message) => {         // on message
                 {
                     user_id: tran.user_id,
                     trans_id: tran.trans_id,
-                    companyName: name,
+                    company_name: name,
                     name: tran.name,
                     amount: tran.amount,
                     date: date,
@@ -181,12 +191,14 @@ socket.on('message', (message) => {         // on message
             for(var i = 0; i < doc.length; i++) 
                 result.push(JSON.parse(doc[i].recurring_transactions));
             socket.send(JSON.stringify(result));
-            if(err)
+            if(err) {
                 console.log(`Error: ${err}`);
+                socket.send(err);
+            }
         });
     }
 }, setTimeout(() => {
-       console.log("Waited 10 seconds, Socket has been closed");
+       console.log("10 seconds Timeout, Socket has been closed");
        socket.close();
     }, 10000)
 );
